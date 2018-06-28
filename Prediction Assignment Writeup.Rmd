@@ -1,0 +1,119 @@
+---
+title: "Practical Machine Learning: Prediction Assignment"
+output: html_document
+---
+
+##Background
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. The goal of this project is to form a machine learning model by using data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. 
+
+##Data
+The training data for this project is obtained from:
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+whereas the test data is avaiable here:
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+The data comes from this source: http://groupware.les.inf.puc-rio.br/har
+
+##Preliminary Work
+The pseudo-random number generator seed was set at 578. 
+```{r, warning=F }
+library(caret)
+set.seed(578)
+```
+
+
+##Loading the data
+We first load the datasets into the environment. Before that, it was discovered that the datasets consists of missing values for some predictors, denoted as "Na".
+```{r}
+if( !file.exists("pml-training.csv")) {download.file(url="https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv",destfile="pml-training.csv")}
+ train_raw <- read.csv("pml-training.csv",na.strings = c("NA","#DIV/0!"))
+if( !file.exists("pml-testing.csv")) {download.file(url="https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv",destfile="pml-testing.csv")}
+testSet <- read.csv(file="pml-testing.csv",na.strings = c("NA","#DIV/0!"))
+```
+
+##Data Exploration and Cleaning
+We check the number of variables and number of the observations in the datasets.
+```{r, warning=F}
+library(Amelia)
+
+dim(train_raw )
+dim(testSet)
+par(mfrow=c(1,2))
+missmap(train_raw)
+```
+
+We found that there is some colums with all mising values and they should be removed. So we have omitted columns with 90% missing value.
+
+```{r}
+five<- function(x) sum(!is.na(x))/length(x)
+trainSet<-train_raw[,apply(train_raw, 2, five)>0.1]
+test<-testSet[,apply(testSet, 2, five)>0.1]
+missmap(trainSet)
+```
+
+It seems that every observations has complete values for all variables.
+
+Next, we remove some firest seven variables that is not related to our model building.
+
+```{r}
+trainSet1 <- trainSet[,-c(1:7)]
+```
+
+##Validation Set
+Before we start building our model, we remove a part of the training set as the validation set to test the out-of-sample error.
+
+##Model building
+We would use three methods, random forest, multinormial logistic regression and linear discriminant analysis to build models and select the best one out from them. 
+
+###Cross Validation
+To eliminate bias and overfitting when selecting the best models, we would do a data split of 75% for training and the rest for testing. The model with the lowest average error from is the best model.
+
+
+###Model evalaution
+The model will be evaluated by the confusion matrix: Accuracy rate
+```{r,echo=T,warning=F,results = 'hide'}
+library(randomForest)
+library(nnet)
+split <- 0.75
+trainpartition <-  createDataPartition(trainSet1$classe, p=split, list=FALSE)
+
+trainSet <- trainSet1[trainpartition,]
+validSet <- trainSet1[-trainpartition,]
+
+
+mod1 <- randomForest(classe ~ ., data=trainSet,method="class")
+mod2 <- multinom(classe ~ ., data=trainSet, maxit =1000, trace=T)
+mod3 <- train(classe ~ ., data=trainSet, method="lda",na.action = na.exclude)
+  
+pred1 <- predict(mod1,validSet)
+pred2 <- predict(mod2,validSet)
+pred3 <- predict(mod3,validSet)
+
+  
+model1_accuracy <- sum(pred1==validSet$classe)/length(pred1)
+model2_accuracy <- sum(pred2==validSet$classe)/length(pred2)
+model3_accuracy <- sum(pred3==validSet$classe)/length(pred3)
+
+```
+
+```{r}
+
+model1_accuracy #for random forest
+model2_accuracy #for multinormial logistic regression
+model3_accuracy #for linear discriminant analysis
+```
+
+###Final Model
+From above, we found that Random Forest model achieve the best score. We hence pick Random Forest to be our model. We now use the entire training Set to build the final model and use the validation set to get the expected out-of-sample error.
+```{r}
+con<-confusionMatrix(pred1,validSet$classe)
+con
+```
+Based on the confusion matrix summary. Sensitivity is `r colMeans(con$byClass)[1]` Specificity is `r colMeans(con$byClass)[2]` The balaced accuracy is `r colMeans(con$byClass)[11]`
+
+
+##Results for the Test Cases
+We now use our model to predict the classe for the 20 test cases.
+```{r}
+ predict(mod1,test)
+```
