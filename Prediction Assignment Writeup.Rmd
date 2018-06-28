@@ -1,6 +1,10 @@
 ---
-title: "Practical Machine Learning: Prediction Assignment"
-output: html_document
+title: 'Practical Machine Learning: Prediction Assignment'
+output:
+  md_document:
+    variant: markdown_github
+  html_document: default
+  word_document: default
 ---
 
 ##Background
